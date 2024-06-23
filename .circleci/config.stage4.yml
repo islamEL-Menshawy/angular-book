@@ -1,0 +1,54 @@
+version: 2.1
+orbs:
+  browser-tools: circleci/browser-tools@1
+  cypress: cypress-io/cypress@3
+commands:
+  install:
+    description: 'Install project dependencies'
+    steps:
+      - checkout
+      - restore_cache:
+          keys:
+            - node_modules-{{ checksum "package-lock.json" }}
+      - run: npm install
+      - save_cache:
+          key: node_modules-{{ checksum "package-lock.json" }}
+          paths:
+            - node_modules
+  lint:
+    description: 'Check for code style and linting errors'
+    steps:
+      - run: npm run style
+      - run: npm run lint
+  build_and_test:
+    description: 'Builds and tests Angular project'
+    steps:
+      - run: npx ng build --configuration production
+      - attach_workspace:
+          at: ~/
+      - browser-tools/install-chrome
+      - browser-tools/install-chromedriver
+      - run: npx ng test --watch=false --code-coverage
+  store:
+    description: 'Stores build_and_test artifacts'
+    steps:
+      - store_test_results:
+          path: ./test_results
+      - store_artifacts:
+          path: ./coverage
+jobs:
+  run_build_and_test:
+    docker:
+      - image: cimg/node:lts-browsers
+    working_directory: ~/repo
+    steps:
+      - install
+      - cypress/install
+      - lint
+      - build_and_test
+      - run: npx ng run local-weather-app:cypress-run
+      - store
+workflows:
+  build-and-test:
+    jobs:
+      - run_build_and_test
